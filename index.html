@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vocab SRS - Học Thông Minh</title>
+    <title>Vocab Pro - Audio & SRS</title>
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4f46e5">
     <script src="dexie.js"></script>
     
@@ -32,7 +33,14 @@
         .due-badge { background: var(--danger); color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; font-weight: bold; }
         
         /* Quiz Styles */
-        .word-display { font-size: 2.2rem; font-weight: 800; text-align: center; color: var(--primary); margin: 30px 0; min-height: 60px; }
+        .word-container { text-align: center; margin: 30px 0; }
+        .word-display { font-size: 2.2rem; font-weight: 800; color: var(--primary); display: inline-block; cursor: pointer; }
+        .phonetic-display { font-size: 1.1rem; color: #64748b; margin-top: 5px; font-family: 'Segoe UI', sans-serif; min-height: 24px; }
+        .blur-text { filter: blur(5px); opacity: 0.5; cursor: pointer; transition: 0.3s; }
+        .blur-text:hover, .blur-text.revealed { filter: none; opacity: 1; }
+
+        .btn-speak { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--primary); padding: 0 10px; vertical-align: middle; }
+        
         .grid-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .opt-btn { padding: 18px; background: white; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; cursor: pointer; font-weight: 500; }
         .opt-btn:hover { background: #f1f5f9; }
@@ -63,10 +71,15 @@
             </div>
 
             <div id="quizArea" style="display:none">
-                <div class="word-display" id="qWord">---</div>
+                <div class="word-container">
+                    <div>
+                        <span class="word-display" id="qWord" onclick="speakCurrent()">---</span>
+                        <button class="btn-speak" onclick="speakCurrent()">🔊</button>
+                    </div>
+                    <div id="qPhonetic" class="phonetic-display blur-text" onclick="this.classList.add('revealed')">---</div>
+                </div>
                 
                 <div class="grid-options" id="qOptions"></div>
-                
                 <div id="qMsg" style="text-align:center; height:25px; margin:15px 0; font-weight:bold"></div>
                 
                 <div style="display:flex; gap:10px">
@@ -79,7 +92,7 @@
                 <div style="font-size: 3rem;">🎉</div>
                 <h3>Tuyệt vời!</h3>
                 <p>Bạn đã hoàn thành bài ôn tập hôm nay.</p>
-                <button class="btn btn-outline" onclick="forceReviewMode()">💪 Ôn tập ngẫu nhiên (Cram)</button>
+                <button class="btn btn-outline" onclick="forceReviewMode()">💪 Ôn tập ngẫu nhiên</button>
             </div>
 
             <div id="emptyArea" style="text-align:center; padding:30px; display:none">
@@ -93,9 +106,10 @@
         <div class="card">
             <h3>➕ Thêm Từ Mới</h3>
             <div style="display:flex; gap:10px">
-                <input type="text" id="inpWord" placeholder="Từ (VD: Cat)" style="flex:2">
+                <input type="text" id="inpWord" placeholder="Từ (VD: Cat / 你好)" style="flex:2">
                 <select id="inpLang" style="flex:1"><option value="EN">Anh</option><option value="CN">Trung</option></select>
             </div>
+            <input type="text" id="inpPhonetic" placeholder="Phiên âm (VD: /kæt/ hoặc nǐ hǎo)">
             <input type="text" id="inpMeaning" placeholder="Nghĩa (VD: Con mèo)">
             <button class="btn btn-primary" onclick="addWord()">Lưu Từ</button>
             <p id="addStatus" style="text-align:center; color:var(--success); margin:5px 0"></p>
@@ -104,8 +118,8 @@
         <div class="card">
             <h3>📂 Quản lý Dữ liệu</h3>
             <div style="display:flex; gap:10px; margin-bottom:10px">
-                <button class="btn btn-outline" onclick="downloadSample()">📥 File mẫu</button>
-                <button class="btn btn-warning" onclick="resetLevels()">🔄 Reset Level học</button>
+                <button class="btn btn-outline" onclick="downloadSample()">📥 File mẫu Mới</button>
+                <button class="btn btn-warning" onclick="resetLevels()">🔄 Reset Level</button>
             </div>
             <div style="display:flex; gap:10px; margin-bottom:15px">
                 <input type="file" id="csvFile" accept=".csv" style="margin-bottom:0">
@@ -130,97 +144,92 @@
     </div>
 
 <script>
-    // --- 1. CONFIG & DB ---
-    // Cấu hình SRS: Số ngày giãn cách cho các level 1, 2, 3...
-    // Level 0: Học ngay. Level 1: 1 ngày. Level 2: 3 ngày...
     const SRS_INTERVALS = [0, 1, 3, 7, 14, 30, 90, 180]; 
-
     const db = new Dexie("VocabDB");
     
-    // UPDATE VERSION 2: Thêm 'level' và 'nextReview'
+    // UPDATE VERSION 3: Thêm 'p' (phonetic)
     db.version(1).stores({ words: "++id, w, m, l" });
-    db.version(2).stores({ words: "++id, w, m, l, level, nextReview" })
+    db.version(2).stores({ words: "++id, w, m, l, level, nextReview" });
+    db.version(3).stores({ words: "++id, w, m, l, level, nextReview, p" })
       .upgrade(tx => {
-          // Khi người dùng cũ nâng cấp, mặc định set level = 0
           return tx.table("words").toCollection().modify(item => {
-              item.level = 0;
-              item.nextReview = 0;
+              if(!item.p) item.p = ""; // Thêm trường p rỗng cho dữ liệu cũ
           });
       });
 
     let cachedWords = [];
-    let dueWords = []; // Danh sách các từ cần ôn ngay
+    let dueWords = [];
     let quizHistory = [];
     let historyIndex = -1;
-    let isCramMode = false; // Chế độ học nhồi (khi đã hết từ cần ôn)
-
-    // --- 2. CORE FUNCTIONS ---
+    let isCramMode = false;
+    let currentQuizItem = null;
 
     async function initApp() {
-        // Load toàn bộ từ vào RAM
         cachedWords = await db.words.toArray();
-        
-        // Kiểm tra xem có từ nào chưa có level (do lỗi cũ) thì fix ngay
-        const needFix = cachedWords.filter(w => w.level === undefined);
-        if(needFix.length > 0) {
-            await db.words.toCollection().modify(w => {
-                if(w.level === undefined) { w.level = 0; w.nextReview = 0; }
-            });
-            cachedWords = await db.words.toArray();
-        }
-
         updateSRSStatus();
         document.getElementById('jsonFile').addEventListener('change', restoreJSON);
-        
         if(document.getElementById('quiz').classList.contains('active')) nextQuestion();
     }
 
-    // Tính toán xem từ nào cần học
     function calculateDueWords() {
         const now = Date.now();
         const filter = document.getElementById('quizFilter').value;
-        
         let pool = cachedWords;
         if(filter !== 'ALL') pool = pool.filter(w => w.l === filter);
-
-        // Lọc ra các từ có thời gian review <= hiện tại
         return pool.filter(w => (w.nextReview || 0) <= now).sort((a,b) => a.nextReview - b.nextReview);
     }
 
     function updateSRSStatus() {
         const due = calculateDueWords();
-        const total = cachedWords.length;
         const msg = due.length > 0 
             ? `Cần ôn: <b class="due-badge">${due.length}</b> từ` 
             : `<span style="color:var(--success)">Đã học xong!</span>`;
         document.getElementById('reviewStatus').innerHTML = msg;
     }
 
+    // --- TTS FUNCTION ---
+    function speakCurrent() {
+        if(!currentQuizItem) return;
+        speakText(currentQuizItem.w, currentQuizItem.l);
+    }
+
+    function speakText(text, lang) {
+        if (!('speechSynthesis' in window)) return alert("Máy bạn không hỗ trợ đọc!");
+        
+        // Ngắt các âm thanh đang đọc dở
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        // Chọn giọng: CN -> Trung, EN -> Anh
+        utterance.lang = (lang === 'CN') ? 'zh-CN' : 'en-US';
+        utterance.rate = 0.9; // Tốc độ đọc hơi chậm 1 chút cho dễ nghe
+        
+        window.speechSynthesis.speak(utterance);
+    }
+
     async function addWord() {
         const w = document.getElementById('inpWord').value.trim();
         const m = document.getElementById('inpMeaning').value.trim();
+        const p = document.getElementById('inpPhonetic').value.trim(); // Lấy phiên âm
         const l = document.getElementById('inpLang').value;
-        if(!w || !m) return alert("Thiếu thông tin!");
+        
+        if(!w || !m) return alert("Thiếu từ hoặc nghĩa!");
 
-        const newItem = { 
-            w, m, l, 
-            level: 0,           // Mới tinh
-            nextReview: 0       // Học ngay
-        };
-
+        const newItem = { w, m, l, p, level: 0, nextReview: 0 };
         const id = await db.words.add(newItem);
         cachedWords.unshift({ ...newItem, id });
         
         document.getElementById('inpWord').value = '';
         document.getElementById('inpMeaning').value = '';
+        document.getElementById('inpPhonetic').value = '';
+        document.getElementById('inpWord').focus();
+        
         document.getElementById('addStatus').innerText = "Đã lưu!";
         setTimeout(()=>document.getElementById('addStatus').innerText="", 2000);
-        
         updateSRSStatus();
     }
 
-    // --- 3. QUIZ LOGIC (SRS) ---
-
+    // --- QUIZ LOGIC ---
     function resetQuiz() {
         quizHistory = [];
         historyIndex = -1;
@@ -235,29 +244,21 @@
             return;
         }
 
-        // 1. Lấy danh sách cần ôn
         dueWords = calculateDueWords();
         updateSRSStatus();
 
         let questionItem;
-
-        // 2. Logic chọn từ
         if (dueWords.length > 0) {
-            // Ưu tiên từ cần ôn nhất
             isCramMode = false;
-            // Lấy ngẫu nhiên trong 10 từ đầu tiên để đỡ nhàm chán
             const topN = dueWords.slice(0, 10);
             questionItem = topN[Math.floor(Math.random() * topN.length)];
         } else {
-            // Hết từ cần ôn
             if (!isCramMode) {
-                // Nếu chưa bật chế độ Cram -> Hiện màn hình chúc mừng
                 document.getElementById('quizArea').style.display = 'none';
                 document.getElementById('doneArea').style.display = 'block';
                 document.getElementById('emptyArea').style.display = 'none';
                 return;
             } else {
-                // Chế độ Cram: Lấy ngẫu nhiên từ bất kỳ để ôn
                 const filter = document.getElementById('quizFilter').value;
                 let pool = (filter === 'ALL') ? cachedWords : cachedWords.filter(x => x.l === filter);
                 if (pool.length < 4) return showEmpty();
@@ -267,20 +268,13 @@
 
         if(!questionItem) return showEmpty();
 
-        // 3. Tạo đáp án sai (Distractors)
         const filter = document.getElementById('quizFilter').value;
         let pool = (filter === 'ALL') ? cachedWords : cachedWords.filter(x => x.l === filter);
-        
         if (pool.length < 4) return showEmpty();
 
-        const distractors = pool
-            .filter(x => x.id !== questionItem.id)
-            .sort(() => 0.5 - Math.random())
-            .slice(0, 3);
-        
+        const distractors = pool.filter(x => x.id !== questionItem.id).sort(() => 0.5 - Math.random()).slice(0, 3);
         const options = [questionItem, ...distractors].sort(() => 0.5 - Math.random());
 
-        // 4. Hiển thị
         const qData = { correct: questionItem, options };
         quizHistory.push(qData);
         historyIndex++;
@@ -293,12 +287,18 @@
     }
 
     function renderQuestion(q) {
+        currentQuizItem = q.correct; // Lưu từ hiện tại để đọc
         document.getElementById('qWord').innerText = q.correct.w;
+        
+        // Xử lý Pinyin/IPA
+        const phoneticEl = document.getElementById('qPhonetic');
+        phoneticEl.innerText = q.correct.p || "(Chưa có phiên âm)";
+        phoneticEl.classList.remove('revealed'); // Che đi lúc mới hiện
+
         const grid = document.getElementById('qOptions');
         grid.innerHTML = '';
         document.getElementById('qMsg').innerText = '';
         
-        // Hiển thị nút
         q.options.forEach(opt => {
             const btn = document.createElement('button');
             btn.className = 'opt-btn';
@@ -308,15 +308,18 @@
         });
 
         document.getElementById('btnPrev').disabled = (historyIndex <= 0);
-        // Ẩn nút Next cho đến khi chọn đáp án (để bắt buộc người dùng suy nghĩ)
         document.getElementById('btnNext').style.visibility = 'hidden'; 
     }
 
-    // Xử lý khi chọn đáp án (Trái tim của SRS)
     async function handleAnswer(btn, selected, correct) {
-        // Disable buttons
         document.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
         document.getElementById('btnNext').style.visibility = 'visible';
+        
+        // Hiện phiên âm khi đã trả lời xong
+        document.getElementById('qPhonetic').classList.add('revealed');
+        
+        // Tự động đọc từ đúng (Nếu muốn tắt thì comment dòng dưới)
+        speakText(correct.w, correct.l);
 
         const isCorrect = (selected.id === correct.id);
         
@@ -324,82 +327,56 @@
             btn.classList.add('correct');
             document.getElementById('qMsg').innerHTML = "<span style='color:var(--success)'>Chính xác! 🎉</span>";
             
-            // LOGIC SRS: TĂNG CẤP
-            if (!isCramMode) { // Chỉ tính điểm khi học chính thức
+            if (!isCramMode) {
                 const currentLevel = correct.level || 0;
                 const newLevel = currentLevel + 1;
-                const daysToAdd = SRS_INTERVALS[newLevel] || 180; // Mặc định max 180 ngày
+                const daysToAdd = SRS_INTERVALS[newLevel] || 180;
                 const nextDate = Date.now() + (daysToAdd * 24 * 60 * 60 * 1000);
-                
                 await updateWordSRS(correct.id, newLevel, nextDate);
-                
-                // Feedback nhỏ
-                const msg = daysToAdd < 1 ? "Ôn lại ngày mai" : `Ôn lại sau ${daysToAdd} ngày`;
-                document.getElementById('qMsg').innerHTML += ` <small style="color:#666">(${msg})</small>`;
             }
-
         } else {
             btn.classList.add('wrong');
-            // Hiện đáp án đúng
             document.querySelectorAll('.opt-btn').forEach(b => {
                 if(b.innerText === correct.m) b.classList.add('correct');
             });
-            document.getElementById('qMsg').innerHTML = "<span style='color:var(--danger)'>Quên rồi sao? 😅</span>";
-
-            // LOGIC SRS: RESET VỀ 0
-            if (!isCramMode) {
-                await updateWordSRS(correct.id, 0, 0); // Reset level, nextReview = 0 (bắt học lại ngay)
-                document.getElementById('qMsg').innerHTML += ` <small style="color:#666">(Học lại từ đầu)</small>`;
-            }
+            document.getElementById('qMsg').innerHTML = "<span style='color:var(--danger)'>Sai rồi!</span>";
+            if (!isCramMode) await updateWordSRS(correct.id, 0, 0);
         }
     }
 
     async function updateWordSRS(id, newLevel, newNextReview) {
-        // 1. Update DB
         await db.words.update(id, { level: newLevel, nextReview: newNextReview });
-        
-        // 2. Update RAM (để UI cập nhật ngay mà không cần reload)
         const wordInRam = cachedWords.find(w => w.id === id);
         if (wordInRam) {
             wordInRam.level = newLevel;
             wordInRam.nextReview = newNextReview;
         }
-        
-        // 3. Update Badge
         updateSRSStatus();
     }
 
-    function forceReviewMode() {
-        isCramMode = true;
-        nextQuestion();
-    }
-
+    function forceReviewMode() { isCramMode = true; nextQuestion(); }
     function showEmpty() {
         document.getElementById('quizArea').style.display = 'none';
         document.getElementById('emptyArea').style.display = 'block';
     }
 
-    // --- 4. LIST & UTILS ---
-
+    // --- LIST & IMPORT ---
     function renderList() {
         const container = document.getElementById('listContainer');
         const search = document.getElementById('search').value.toLowerCase();
         container.innerHTML = '';
         
-        // Hiển thị thống kê nhỏ trong list
         let count = 0;
         for(const item of cachedWords) {
             if(count > 50 && !search) break;
             if(item.w.toLowerCase().includes(search) || item.m.toLowerCase().includes(search)) {
                 
-                // Màu sắc chấm level
                 const lvl = item.level || 0;
-                let color = '#ccc'; // Lv0
-                if(lvl > 0) color = '#ef4444'; // Lv1-2
-                if(lvl > 2) color = '#f59e0b'; // Lv3-4
-                if(lvl > 4) color = '#22c55e'; // Lv5+
+                let color = '#ccc';
+                if(lvl > 0) color = '#ef4444';
+                if(lvl > 2) color = '#f59e0b';
+                if(lvl > 4) color = '#22c55e';
 
-                // Ngày review
                 const due = item.nextReview || 0;
                 const isDue = due <= Date.now();
                 const dateStr = due === 0 ? "Mới" : new Date(due).toLocaleDateString('vi-VN', {day:'numeric', month:'numeric'});
@@ -411,7 +388,9 @@
                         <div>
                             <span class="level-dot" style="background:${color}" title="Level ${lvl}"></span>
                             <span class="badge ${item.l}">${item.l}</span> 
-                            <b>${item.w}</b>
+                            <b>${item.w}</b> 
+                            <small style="color:#666; font-style:italic">${item.p || ''}</small>
+                            <button onclick="speakText('${item.w}', '${item.l}')" style="border:none;background:none;cursor:pointer">🔊</button>
                         </div>
                         <div style="font-size:0.9em; color:#64748b; margin-top:2px">
                             ${item.m} 
@@ -429,10 +408,9 @@
     }
 
     async function resetLevels() {
-        if(confirm("Bạn muốn reset tất cả từ vựng về Level 0 (Học lại từ đầu)?")) {
+        if(confirm("Reset tất cả về Level 0?")) {
             await db.words.toCollection().modify({ level: 0, nextReview: 0 });
             cachedWords = await db.words.toArray();
-            alert("Đã reset!");
             updateSRSStatus();
             renderList();
         }
@@ -445,11 +423,15 @@
         reader.onload = async (e) => {
             const lines = e.target.result.split(/\r\n|\n/);
             let newItems = [];
+            // Hỗ trợ CSV có 4 cột: Word, Meaning, Lang, Phonetic
             lines.forEach(line => {
                 const p = line.split(',');
                 if(p.length >= 2 && !p[0].toLowerCase().includes('tuvung')) {
-                    const w = p[0].trim(), m = p[1].trim(), l = p[2]?.trim().toUpperCase() || 'EN';
-                    if(w && m) newItems.push({ w, m, l, level: 0, nextReview: 0 });
+                    const w = p[0].trim();
+                    const m = p[1].trim();
+                    const l = p[2]?.trim().toUpperCase() || 'EN';
+                    const ph = p[3] ? p[3].trim() : ""; // Cột thứ 4 là phiên âm
+                    if(w && m) newItems.push({ w, m, l, p: ph, level: 0, nextReview: 0 });
                 }
             });
             if(newItems.length > 0) {
@@ -462,21 +444,24 @@
         reader.readAsText(file);
     }
 
-    // Các hàm khác giữ nguyên (Export, Delete, Tab...)
     async function deleteWord(id) {
         if(confirm("Xóa?")) { await db.words.delete(id); cachedWords = cachedWords.filter(x=>x.id!==id); renderList(); updateSRSStatus(); }
     }
     async function clearDB() { if(confirm("Xóa hết?")) { await db.words.clear(); cachedWords=[]; location.reload(); } }
-    function downloadSample() { /* Giữ nguyên code cũ */ 
-        const c = "\uFEFFTuVung,Nghia,NgonNgu(EN/CN)\nHello,Xin chào,EN"; 
+    
+    function downloadSample() { 
+        // File mẫu cập nhật thêm cột Phiên âm
+        const c = "\uFEFFTuVung,Nghia,NgonNgu(EN/CN),PhienAm\nHello,Xin chào,EN,/həˈloʊ/\n你好,Xin chào,CN,nǐ hǎo"; 
         const b = new Blob([c],{type:'text/csv;charset=utf-8;'}); 
-        const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download="Mau.csv"; a.click();
+        const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download="Mau_Moi.csv"; a.click();
     }
+    
     async function exportJSON() {
         const d = await db.words.toArray();
         const b = new Blob([JSON.stringify(d)],{type:"application/json"});
         const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`Backup_${Date.now()}.json`; a.click();
     }
+    
     function restoreJSON(e) {
         const f = e.target.files[0]; if(!f) return;
         const r = new FileReader(); r.onload=async(ev)=>{
@@ -485,6 +470,7 @@
             }} catch(err){alert("Lỗi file");}
         }; r.readAsText(f);
     }
+    
     function switchTab(id) {
         document.querySelectorAll('.content').forEach(e => e.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
@@ -492,6 +478,8 @@
         document.querySelector(`button[onclick="switchTab('${id}')"]`).classList.add('active');
         if(id==='list') renderList();
     }
+
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
 
     initApp();
 </script>
