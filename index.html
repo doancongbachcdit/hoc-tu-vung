@@ -3,84 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vocab Master - IndexedDB (Database Offline)</title>
+    <title>Vocab SRS - Học Thông Minh</title>
+    <meta name="theme-color" content="#4f46e5">
     <script src="dexie.js"></script>
     
     <style>
-        :root { --primary: #2563eb; --bg: #f1f5f9; --card: #fff; --text: #1e293b; --success: #16a34a; --danger: #dc2626; }
+        :root { --primary: #4f46e5; --bg: #f8fafc; --card: #fff; --text: #334155; --success: #22c55e; --danger: #ef4444; --warning: #f59e0b; }
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 600px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
         
-        /* UI Components */
-        .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .tabs { display: flex; gap: 5px; margin-bottom: 20px; background: #e2e8f0; padding: 5px; border-radius: 10px; }
-        .tab-btn { flex: 1; padding: 10px; border: none; background: none; font-weight: 600; cursor: pointer; border-radius: 8px; color: #64748b; transition: 0.2s; }
-        .tab-btn.active { background: #fff; color: var(--primary); shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .card { background: var(--card); padding: 20px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; background: #e2e8f0; padding: 4px; border-radius: 12px; }
+        .tab-btn { flex: 1; padding: 12px; border: none; background: none; font-weight: 600; cursor: pointer; border-radius: 8px; color: #64748b; transition: 0.2s; }
+        .tab-btn.active { background: #fff; color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .content { display: none; animation: fadeIn 0.3s; }
         .content.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; } }
 
-        /* Inputs & Buttons */
-        input, select { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
-        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 5px; transition: 0.2s; }
+        input, select { width: 100%; padding: 14px; margin-bottom: 12px; border: 1px solid #cbd5e1; border-radius: 10px; box-sizing: border-box; font-size: 16px; }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; font-size: 16px; }
         .btn:active { transform: scale(0.98); }
         .btn-primary { background: var(--primary); }
         .btn-success { background: var(--success); }
         .btn-danger { background: var(--danger); }
         .btn-outline { background: white; border: 1px solid #cbd5e1; color: var(--text); }
         
+        /* SRS Badge */
+        .srs-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 0.9em; background: #eff6ff; padding: 10px; border-radius: 8px; color: var(--primary); }
+        .due-badge { background: var(--danger); color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; font-weight: bold; }
+        
         /* Quiz Styles */
-        .word-display { font-size: 2.5rem; font-weight: 800; text-align: center; color: var(--primary); margin: 20px 0; }
-        .grid-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .opt-btn { padding: 15px; background: white; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem; cursor: pointer; }
+        .word-display { font-size: 2.2rem; font-weight: 800; text-align: center; color: var(--primary); margin: 30px 0; min-height: 60px; }
+        .grid-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .opt-btn { padding: 18px; background: white; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; cursor: pointer; font-weight: 500; }
+        .opt-btn:hover { background: #f1f5f9; }
         .opt-btn.correct { background: var(--success); color: white; border-color: var(--success); }
-        .opt-btn.wrong { background: var(--danger); color: white; border-color: var(--danger); opacity: 0.5; }
+        .opt-btn.wrong { background: var(--danger); color: white; border-color: var(--danger); opacity: 0.6; }
 
-        /* List Styles */
-        .vocab-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #f1f5f9; align-items: center; }
-        .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; font-weight: bold; margin-right: 8px; }
-        .badge.EN { background: #dbeafe; color: #1e40af; }
-        .badge.CN { background: #fce7f3; color: #9d174d; }
+        .vocab-item { display: flex; justify-content: space-between; padding: 14px; border-bottom: 1px solid #f1f5f9; align-items: center; }
+        .level-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
     </style>
 </head>
 <body>
 
     <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('quiz')">🧠 Quiz</button>
+        <button class="tab-btn active" onclick="switchTab('quiz')">🧠 Học Tập</button>
         <button class="tab-btn" onclick="switchTab('data')">📂 Dữ Liệu</button>
         <button class="tab-btn" onclick="switchTab('list')">📚 Danh Sách</button>
     </div>
 
     <div id="quiz" class="content active">
         <div class="card">
-            <div style="display:flex; justify-content:space-between; margin-bottom:10px">
-                <select id="quizFilter" onchange="resetQuiz()" style="width:auto; padding:5px">
+            <div class="srs-info">
+                <span id="reviewStatus">Đang tải...</span>
+                <select id="quizFilter" onchange="resetQuiz()" style="width:auto; padding:5px; margin:0; font-size:0.9em">
                     <option value="ALL">Tất cả</option>
                     <option value="EN">Tiếng Anh</option>
                     <option value="CN">Tiếng Trung</option>
                 </select>
-                <small id="dbStats" style="color:#64748b">Loading...</small>
             </div>
 
             <div id="quizArea" style="display:none">
                 <div class="word-display" id="qWord">---</div>
+                
                 <div class="grid-options" id="qOptions"></div>
-                <div id="qMsg" style="text-align:center; height:20px; margin:10px 0; font-weight:bold"></div>
+                
+                <div id="qMsg" style="text-align:center; height:25px; margin:15px 0; font-weight:bold"></div>
+                
                 <div style="display:flex; gap:10px">
-                    <button class="btn btn-outline" id="btnPrev" onclick="prevQuestion()" disabled>⬅️ Quay lại</button>
-                    <button class="btn btn-primary" onclick="nextQuestion()">Tiếp theo ➡️</button>
+                    <button class="btn btn-outline" id="btnPrev" onclick="prevQuestion()" disabled>⬅️ Xem lại</button>
+                    <button class="btn btn-primary" id="btnNext" onclick="nextQuestion()">Tiếp theo ➡️</button>
                 </div>
             </div>
 
+            <div id="doneArea" style="text-align:center; padding:30px; display:none">
+                <div style="font-size: 3rem;">🎉</div>
+                <h3>Tuyệt vời!</h3>
+                <p>Bạn đã hoàn thành bài ôn tập hôm nay.</p>
+                <button class="btn btn-outline" onclick="forceReviewMode()">💪 Ôn tập ngẫu nhiên (Cram)</button>
+            </div>
+
             <div id="emptyArea" style="text-align:center; padding:30px; display:none">
-                <p>Cần ít nhất 4 từ vựng để bắt đầu!</p>
-                <button class="btn btn-primary" onclick="switchTab('data')">Thêm dữ liệu ngay</button>
+                <p>Chưa có dữ liệu. Hãy thêm từ vựng để bắt đầu!</p>
+                <button class="btn btn-primary" onclick="switchTab('data')">Thêm từ ngay</button>
             </div>
         </div>
     </div>
 
     <div id="data" class="content">
         <div class="card">
-            <h3>➕ Thêm Thủ Công</h3>
+            <h3>➕ Thêm Từ Mới</h3>
             <div style="display:flex; gap:10px">
                 <input type="text" id="inpWord" placeholder="Từ (VD: Cat)" style="flex:2">
                 <select id="inpLang" style="flex:1"><option value="EN">Anh</option><option value="CN">Trung</option></select>
@@ -91,22 +102,24 @@
         </div>
 
         <div class="card">
-            <h3>📂 Nhập Excel (CSV) & Backup</h3>
-            <button class="btn btn-outline" onclick="downloadSample()" style="margin-bottom:10px">📥 Tải file mẫu CSV</button>
+            <h3>📂 Quản lý Dữ liệu</h3>
+            <div style="display:flex; gap:10px; margin-bottom:10px">
+                <button class="btn btn-outline" onclick="downloadSample()">📥 File mẫu</button>
+                <button class="btn btn-warning" onclick="resetLevels()">🔄 Reset Level học</button>
+            </div>
             <div style="display:flex; gap:10px; margin-bottom:15px">
                 <input type="file" id="csvFile" accept=".csv" style="margin-bottom:0">
-                <button class="btn btn-success" onclick="importCSV()" style="width:auto">Nạp</button>
+                <button class="btn btn-success" onclick="importCSV()" style="width:auto">Nạp CSV</button>
             </div>
             <div style="display:flex; gap:10px">
                 <button class="btn btn-outline" onclick="exportJSON()">⬇️ Backup</button>
                 <div style="position:relative; width:100%">
                     <input type="file" id="jsonFile" accept=".json" style="position:absolute; opacity:0; width:100%; height:100%; cursor:pointer">
-                    <button class="btn btn-outline" style="width:100%">♻️ Restore (Chọn file)</button>
+                    <button class="btn btn-outline" style="width:100%">♻️ Restore</button>
                 </div>
             </div>
         </div>
-        
-        <button class="btn btn-danger" onclick="clearDB()">🗑️ Xóa toàn bộ dữ liệu</button>
+        <button class="btn btn-danger" onclick="clearDB()">🗑️ Xóa toàn bộ</button>
     </div>
 
     <div id="list" class="content">
@@ -117,181 +130,102 @@
     </div>
 
 <script>
-    // --- 1. SETUP DATABASE (DEXIE.JS) ---
-    // Tạo database tên 'VocabDB'
+    // --- 1. CONFIG & DB ---
+    // Cấu hình SRS: Số ngày giãn cách cho các level 1, 2, 3...
+    // Level 0: Học ngay. Level 1: 1 ngày. Level 2: 3 ngày...
+    const SRS_INTERVALS = [0, 1, 3, 7, 14, 30, 90, 180]; 
+
     const db = new Dexie("VocabDB");
     
-    // Định nghĩa bảng (Store). '++id' nghĩa là id tự tăng.
-    db.version(1).stores({
-        words: "++id, w, m, l" 
-    });
+    // UPDATE VERSION 2: Thêm 'level' và 'nextReview'
+    db.version(1).stores({ words: "++id, w, m, l" });
+    db.version(2).stores({ words: "++id, w, m, l, level, nextReview" })
+      .upgrade(tx => {
+          // Khi người dùng cũ nâng cấp, mặc định set level = 0
+          return tx.table("words").toCollection().modify(item => {
+              item.level = 0;
+              item.nextReview = 0;
+          });
+      });
 
-    // Biến toàn cục để lưu dữ liệu tạm thời cho Quiz chạy nhanh
     let cachedWords = [];
+    let dueWords = []; // Danh sách các từ cần ôn ngay
     let quizHistory = [];
     let historyIndex = -1;
+    let isCramMode = false; // Chế độ học nhồi (khi đã hết từ cần ôn)
 
-    // --- 2. CORE FUNCTIONS (Async/Await) ---
+    // --- 2. CORE FUNCTIONS ---
 
-    // Khởi động: Load dữ liệu từ DB vào RAM
     async function initApp() {
+        // Load toàn bộ từ vào RAM
         cachedWords = await db.words.toArray();
-        updateStats();
         
-        // Restore listener
-        document.getElementById('jsonFile').addEventListener('change', restoreJSON);
+        // Kiểm tra xem có từ nào chưa có level (do lỗi cũ) thì fix ngay
+        const needFix = cachedWords.filter(w => w.level === undefined);
+        if(needFix.length > 0) {
+            await db.words.toCollection().modify(w => {
+                if(w.level === undefined) { w.level = 0; w.nextReview = 0; }
+            });
+            cachedWords = await db.words.toArray();
+        }
 
-        // Nếu đang ở tab quiz, start luôn
+        updateSRSStatus();
+        document.getElementById('jsonFile').addEventListener('change', restoreJSON);
+        
         if(document.getElementById('quiz').classList.contains('active')) nextQuestion();
+    }
+
+    // Tính toán xem từ nào cần học
+    function calculateDueWords() {
+        const now = Date.now();
+        const filter = document.getElementById('quizFilter').value;
+        
+        let pool = cachedWords;
+        if(filter !== 'ALL') pool = pool.filter(w => w.l === filter);
+
+        // Lọc ra các từ có thời gian review <= hiện tại
+        return pool.filter(w => (w.nextReview || 0) <= now).sort((a,b) => a.nextReview - b.nextReview);
+    }
+
+    function updateSRSStatus() {
+        const due = calculateDueWords();
+        const total = cachedWords.length;
+        const msg = due.length > 0 
+            ? `Cần ôn: <b class="due-badge">${due.length}</b> từ` 
+            : `<span style="color:var(--success)">Đã học xong!</span>`;
+        document.getElementById('reviewStatus').innerHTML = msg;
     }
 
     async function addWord() {
         const w = document.getElementById('inpWord').value.trim();
         const m = document.getElementById('inpMeaning').value.trim();
         const l = document.getElementById('inpLang').value;
+        if(!w || !m) return alert("Thiếu thông tin!");
 
-        if(!w || !m) return alert("Thiếu từ hoặc nghĩa!");
+        const newItem = { 
+            w, m, l, 
+            level: 0,           // Mới tinh
+            nextReview: 0       // Học ngay
+        };
 
-        // Lưu vào IndexedDB
-        const id = await db.words.add({ w, m, l });
+        const id = await db.words.add(newItem);
+        cachedWords.unshift({ ...newItem, id });
         
-        // Cập nhật RAM
-        cachedWords.unshift({ id, w, m, l });
-        
-        // UI Feedback
         document.getElementById('inpWord').value = '';
         document.getElementById('inpMeaning').value = '';
-        document.getElementById('addStatus').innerText = `Đã thêm: ${w}`;
-        setTimeout(() => document.getElementById('addStatus').innerText = '', 2000);
-        updateStats();
-    }
-
-    async function deleteWord(id) {
-        if(confirm("Xóa từ này?")) {
-            await db.words.delete(id); // Xóa trong DB
-            cachedWords = cachedWords.filter(x => x.id !== id); // Xóa trong RAM
-            renderList();
-            updateStats();
-        }
-    }
-
-    async function clearDB() {
-        if(confirm("CẢNH BÁO: Xóa sạch 100% dữ liệu?")) {
-            await db.words.clear();
-            cachedWords = [];
-            location.reload();
-        }
-    }
-
-    function updateStats() {
-        document.getElementById('dbStats').innerText = `Database: ${cachedWords.length} từ`;
-    }
-
-    // --- 3. IMPORT / EXPORT ---
-
-    function downloadSample() {
-        const content = "\uFEFFTuVung,Nghia,NgonNgu(EN/CN)\nHello,Xin chào,EN\n你好,Xin chào,CN";
-        const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "Mau_Tu_Vung.csv";
-        link.click();
-    }
-
-    function importCSV() {
-        const file = document.getElementById('csvFile').files[0];
-        if(!file) return alert("Chưa chọn file!");
+        document.getElementById('addStatus').innerText = "Đã lưu!";
+        setTimeout(()=>document.getElementById('addStatus').innerText="", 2000);
         
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            const lines = e.target.result.split(/\r\n|\n/);
-            let count = 0;
-            let newItems = [];
-            
-            // Xử lý dữ liệu
-            lines.forEach(line => {
-                const p = line.split(',');
-                if(p.length >= 2 && !p[0].toLowerCase().includes('tuvung')) {
-                    const w = p[0].trim(), m = p[1].trim(), l = p[2]?.trim().toUpperCase() || 'EN';
-                    if(w && m) newItems.push({ w, m, l });
-                }
-            });
-
-            // Bulk Add vào DB (Nhanh hơn add từng cái)
-            if(newItems.length > 0) {
-                await db.words.bulkAdd(newItems);
-                cachedWords = await db.words.toArray(); // Reload RAM
-                alert(`Đã nạp thành công ${newItems.length} từ!`);
-                document.getElementById('csvFile').value = '';
-                updateStats();
-            }
-        };
-        reader.readAsText(file);
+        updateSRSStatus();
     }
 
-    async function exportJSON() {
-        const allData = await db.words.toArray();
-        const blob = new Blob([JSON.stringify(allData)], {type: "application/json"});
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = `Backup_DB_${new Date().toISOString().slice(0,10)}.json`;
-        link.click();
-    }
-
-    function restoreJSON(e) {
-        const file = e.target.files[0];
-        if(!file) return;
-        
-        const reader = new FileReader();
-        reader.onload = async (ev) => {
-            try {
-                const data = JSON.parse(ev.target.result);
-                if(Array.isArray(data) && confirm(`Khôi phục ${data.length} từ? Dữ liệu cũ sẽ mất.`)) {
-                    await db.words.clear();
-                    await db.words.bulkAdd(data);
-                    location.reload();
-                }
-            } catch(err) { alert("File lỗi!"); }
-        };
-        reader.readAsText(file);
-    }
-
-    // --- 4. QUIZ ENGINE (Giữ nguyên logic nhưng dùng cachedWords) ---
+    // --- 3. QUIZ LOGIC (SRS) ---
 
     function resetQuiz() {
         quizHistory = [];
         historyIndex = -1;
+        isCramMode = false;
         nextQuestion();
-    }
-
-    function renderQuestion(q) {
-        document.getElementById('qWord').innerText = q.correct.w;
-        const grid = document.getElementById('qOptions');
-        grid.innerHTML = '';
-        document.getElementById('qMsg').innerText = '';
-
-        q.options.forEach(opt => {
-            const btn = document.createElement('button');
-            btn.className = 'opt-btn';
-            btn.innerText = opt.m;
-            btn.onclick = () => {
-                document.querySelectorAll('.opt-btn').forEach(b => {
-                    b.disabled = true;
-                    if(b.innerText === q.correct.m) b.classList.add('correct');
-                    else if(b === btn) b.classList.add('wrong');
-                });
-                document.getElementById('qMsg').innerText = (opt.id === q.correct.id) ? "🎉 Chính xác!" : "😅 Sai rồi!";
-            };
-            grid.appendChild(btn);
-        });
-        document.getElementById('btnPrev').disabled = (historyIndex <= 0);
-    }
-
-    function prevQuestion() {
-        if(historyIndex > 0) {
-            historyIndex--;
-            renderQuestion(quizHistory[historyIndex]);
-        }
     }
 
     function nextQuestion() {
@@ -301,45 +235,192 @@
             return;
         }
 
-        const filter = document.getElementById('quizFilter').value;
-        const pool = (filter === 'ALL') ? cachedWords : cachedWords.filter(x => x.l === filter);
+        // 1. Lấy danh sách cần ôn
+        dueWords = calculateDueWords();
+        updateSRSStatus();
 
-        if(pool.length < 4) {
-            document.getElementById('quizArea').style.display = 'none';
-            document.getElementById('emptyArea').style.display = 'block';
-            return;
+        let questionItem;
+
+        // 2. Logic chọn từ
+        if (dueWords.length > 0) {
+            // Ưu tiên từ cần ôn nhất
+            isCramMode = false;
+            // Lấy ngẫu nhiên trong 10 từ đầu tiên để đỡ nhàm chán
+            const topN = dueWords.slice(0, 10);
+            questionItem = topN[Math.floor(Math.random() * topN.length)];
+        } else {
+            // Hết từ cần ôn
+            if (!isCramMode) {
+                // Nếu chưa bật chế độ Cram -> Hiện màn hình chúc mừng
+                document.getElementById('quizArea').style.display = 'none';
+                document.getElementById('doneArea').style.display = 'block';
+                document.getElementById('emptyArea').style.display = 'none';
+                return;
+            } else {
+                // Chế độ Cram: Lấy ngẫu nhiên từ bất kỳ để ôn
+                const filter = document.getElementById('quizFilter').value;
+                let pool = (filter === 'ALL') ? cachedWords : cachedWords.filter(x => x.l === filter);
+                if (pool.length < 4) return showEmpty();
+                questionItem = pool[Math.floor(Math.random() * pool.length)];
+            }
         }
 
-        document.getElementById('quizArea').style.display = 'block';
-        document.getElementById('emptyArea').style.display = 'none';
+        if(!questionItem) return showEmpty();
 
-        const correct = pool[Math.floor(Math.random() * pool.length)];
-        const others = pool.filter(x => x.id !== correct.id).sort(() => 0.5 - Math.random()).slice(0, 3);
-        const options = [correct, ...others].sort(() => 0.5 - Math.random());
+        // 3. Tạo đáp án sai (Distractors)
+        const filter = document.getElementById('quizFilter').value;
+        let pool = (filter === 'ALL') ? cachedWords : cachedWords.filter(x => x.l === filter);
+        
+        if (pool.length < 4) return showEmpty();
 
-        const qData = { correct, options };
+        const distractors = pool
+            .filter(x => x.id !== questionItem.id)
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 3);
+        
+        const options = [questionItem, ...distractors].sort(() => 0.5 - Math.random());
+
+        // 4. Hiển thị
+        const qData = { correct: questionItem, options };
         quizHistory.push(qData);
         historyIndex++;
+        
+        document.getElementById('doneArea').style.display = 'none';
+        document.getElementById('quizArea').style.display = 'block';
+        document.getElementById('emptyArea').style.display = 'none';
+        
         renderQuestion(qData);
     }
 
-    // --- 5. LIST & TABS ---
+    function renderQuestion(q) {
+        document.getElementById('qWord').innerText = q.correct.w;
+        const grid = document.getElementById('qOptions');
+        grid.innerHTML = '';
+        document.getElementById('qMsg').innerText = '';
+        
+        // Hiển thị nút
+        q.options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'opt-btn';
+            btn.innerText = opt.m;
+            btn.onclick = () => handleAnswer(btn, opt, q.correct);
+            grid.appendChild(btn);
+        });
+
+        document.getElementById('btnPrev').disabled = (historyIndex <= 0);
+        // Ẩn nút Next cho đến khi chọn đáp án (để bắt buộc người dùng suy nghĩ)
+        document.getElementById('btnNext').style.visibility = 'hidden'; 
+    }
+
+    // Xử lý khi chọn đáp án (Trái tim của SRS)
+    async function handleAnswer(btn, selected, correct) {
+        // Disable buttons
+        document.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
+        document.getElementById('btnNext').style.visibility = 'visible';
+
+        const isCorrect = (selected.id === correct.id);
+        
+        if (isCorrect) {
+            btn.classList.add('correct');
+            document.getElementById('qMsg').innerHTML = "<span style='color:var(--success)'>Chính xác! 🎉</span>";
+            
+            // LOGIC SRS: TĂNG CẤP
+            if (!isCramMode) { // Chỉ tính điểm khi học chính thức
+                const currentLevel = correct.level || 0;
+                const newLevel = currentLevel + 1;
+                const daysToAdd = SRS_INTERVALS[newLevel] || 180; // Mặc định max 180 ngày
+                const nextDate = Date.now() + (daysToAdd * 24 * 60 * 60 * 1000);
+                
+                await updateWordSRS(correct.id, newLevel, nextDate);
+                
+                // Feedback nhỏ
+                const msg = daysToAdd < 1 ? "Ôn lại ngày mai" : `Ôn lại sau ${daysToAdd} ngày`;
+                document.getElementById('qMsg').innerHTML += ` <small style="color:#666">(${msg})</small>`;
+            }
+
+        } else {
+            btn.classList.add('wrong');
+            // Hiện đáp án đúng
+            document.querySelectorAll('.opt-btn').forEach(b => {
+                if(b.innerText === correct.m) b.classList.add('correct');
+            });
+            document.getElementById('qMsg').innerHTML = "<span style='color:var(--danger)'>Quên rồi sao? 😅</span>";
+
+            // LOGIC SRS: RESET VỀ 0
+            if (!isCramMode) {
+                await updateWordSRS(correct.id, 0, 0); // Reset level, nextReview = 0 (bắt học lại ngay)
+                document.getElementById('qMsg').innerHTML += ` <small style="color:#666">(Học lại từ đầu)</small>`;
+            }
+        }
+    }
+
+    async function updateWordSRS(id, newLevel, newNextReview) {
+        // 1. Update DB
+        await db.words.update(id, { level: newLevel, nextReview: newNextReview });
+        
+        // 2. Update RAM (để UI cập nhật ngay mà không cần reload)
+        const wordInRam = cachedWords.find(w => w.id === id);
+        if (wordInRam) {
+            wordInRam.level = newLevel;
+            wordInRam.nextReview = newNextReview;
+        }
+        
+        // 3. Update Badge
+        updateSRSStatus();
+    }
+
+    function forceReviewMode() {
+        isCramMode = true;
+        nextQuestion();
+    }
+
+    function showEmpty() {
+        document.getElementById('quizArea').style.display = 'none';
+        document.getElementById('emptyArea').style.display = 'block';
+    }
+
+    // --- 4. LIST & UTILS ---
 
     function renderList() {
         const container = document.getElementById('listContainer');
         const search = document.getElementById('search').value.toLowerCase();
         container.innerHTML = '';
         
+        // Hiển thị thống kê nhỏ trong list
         let count = 0;
-        // Sử dụng cachedWords (RAM) để render cho nhanh
         for(const item of cachedWords) {
             if(count > 50 && !search) break;
             if(item.w.toLowerCase().includes(search) || item.m.toLowerCase().includes(search)) {
+                
+                // Màu sắc chấm level
+                const lvl = item.level || 0;
+                let color = '#ccc'; // Lv0
+                if(lvl > 0) color = '#ef4444'; // Lv1-2
+                if(lvl > 2) color = '#f59e0b'; // Lv3-4
+                if(lvl > 4) color = '#22c55e'; // Lv5+
+
+                // Ngày review
+                const due = item.nextReview || 0;
+                const isDue = due <= Date.now();
+                const dateStr = due === 0 ? "Mới" : new Date(due).toLocaleDateString('vi-VN', {day:'numeric', month:'numeric'});
+
                 const div = document.createElement('div');
                 div.className = 'vocab-item';
                 div.innerHTML = `
-                    <div><span class="badge ${item.l}">${item.l}</span> <b>${item.w}</b> <span style="color:#666">- ${item.m}</span></div>
-                    <button onclick="deleteWord(${item.id})" style="border:none;background:none;cursor:pointer">🗑️</button>
+                    <div style="flex:1">
+                        <div>
+                            <span class="level-dot" style="background:${color}" title="Level ${lvl}"></span>
+                            <span class="badge ${item.l}">${item.l}</span> 
+                            <b>${item.w}</b>
+                        </div>
+                        <div style="font-size:0.9em; color:#64748b; margin-top:2px">
+                            ${item.m} 
+                            <span style="float:right; font-size:0.8em; color:${isDue?'red':'green'}">
+                                ${isDue ? '⚡ Cần ôn' : '📅 ' + dateStr}
+                            </span>
+                        </div>
+                    </div>
+                    <button onclick="deleteWord(${item.id})" style="border:none;background:none;color:#999;cursor:pointer;margin-left:10px">✖</button>
                 `;
                 container.appendChild(div);
                 count++;
@@ -347,17 +428,72 @@
         }
     }
 
+    async function resetLevels() {
+        if(confirm("Bạn muốn reset tất cả từ vựng về Level 0 (Học lại từ đầu)?")) {
+            await db.words.toCollection().modify({ level: 0, nextReview: 0 });
+            cachedWords = await db.words.toArray();
+            alert("Đã reset!");
+            updateSRSStatus();
+            renderList();
+        }
+    }
+
+    function importCSV() {
+        const file = document.getElementById('csvFile').files[0];
+        if(!file) return alert("Chưa chọn file!");
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const lines = e.target.result.split(/\r\n|\n/);
+            let newItems = [];
+            lines.forEach(line => {
+                const p = line.split(',');
+                if(p.length >= 2 && !p[0].toLowerCase().includes('tuvung')) {
+                    const w = p[0].trim(), m = p[1].trim(), l = p[2]?.trim().toUpperCase() || 'EN';
+                    if(w && m) newItems.push({ w, m, l, level: 0, nextReview: 0 });
+                }
+            });
+            if(newItems.length > 0) {
+                await db.words.bulkAdd(newItems);
+                cachedWords = await db.words.toArray();
+                alert(`Thêm ${newItems.length} từ!`);
+                updateSRSStatus();
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    // Các hàm khác giữ nguyên (Export, Delete, Tab...)
+    async function deleteWord(id) {
+        if(confirm("Xóa?")) { await db.words.delete(id); cachedWords = cachedWords.filter(x=>x.id!==id); renderList(); updateSRSStatus(); }
+    }
+    async function clearDB() { if(confirm("Xóa hết?")) { await db.words.clear(); cachedWords=[]; location.reload(); } }
+    function downloadSample() { /* Giữ nguyên code cũ */ 
+        const c = "\uFEFFTuVung,Nghia,NgonNgu(EN/CN)\nHello,Xin chào,EN"; 
+        const b = new Blob([c],{type:'text/csv;charset=utf-8;'}); 
+        const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download="Mau.csv"; a.click();
+    }
+    async function exportJSON() {
+        const d = await db.words.toArray();
+        const b = new Blob([JSON.stringify(d)],{type:"application/json"});
+        const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`Backup_${Date.now()}.json`; a.click();
+    }
+    function restoreJSON(e) {
+        const f = e.target.files[0]; if(!f) return;
+        const r = new FileReader(); r.onload=async(ev)=>{
+            try { const d = JSON.parse(ev.target.result); if(Array.isArray(d)) {
+                await db.words.clear(); await db.words.bulkAdd(d); location.reload();
+            }} catch(err){alert("Lỗi file");}
+        }; r.readAsText(f);
+    }
     function switchTab(id) {
         document.querySelectorAll('.content').forEach(e => e.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
         document.getElementById(id).classList.add('active');
         document.querySelector(`button[onclick="switchTab('${id}')"]`).classList.add('active');
-        if(id === 'list') renderList();
+        if(id==='list') renderList();
     }
 
-    // Chạy app
     initApp();
-
 </script>
 </body>
 </html>
