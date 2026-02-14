@@ -275,7 +275,13 @@
         const distractors = pool.filter(x => x.id !== questionItem.id).sort(() => 0.5 - Math.random()).slice(0, 3);
         const options = [questionItem, ...distractors].sort(() => 0.5 - Math.random());
 
-        const qData = { correct: questionItem, options };
+        // Thêm các thuộc tính selectedId và answered để theo dõi
+        const qData = { 
+            correct: questionItem, 
+            options: options,
+            selectedId: undefined, // Chưa chọn gì
+            answered: false        // Chưa tính điểm
+        };
         quizHistory.push(qData);
         historyIndex++;
         
@@ -287,38 +293,67 @@
     }
 
     function renderQuestion(q) {
-        currentQuizItem = q.correct; // Lưu từ hiện tại để đọc
+        currentQuizItem = q.correct;
         document.getElementById('qWord').innerText = q.correct.w;
         
-        // Xử lý Pinyin/IPA
+        // Reset UI Phiên âm
         const phoneticEl = document.getElementById('qPhonetic');
         phoneticEl.innerText = q.correct.p || "(Chưa có phiên âm)";
-        phoneticEl.classList.remove('revealed'); // Che đi lúc mới hiện
+        phoneticEl.classList.remove('revealed');
 
         const grid = document.getElementById('qOptions');
         grid.innerHTML = '';
         document.getElementById('qMsg').innerText = '';
         
+        // Kiểm tra xem câu này đã trả lời chưa?
+        const hasAnswered = q.selectedId !== undefined;
+
         q.options.forEach(opt => {
             const btn = document.createElement('button');
             btn.className = 'opt-btn';
             btn.innerText = opt.m;
             btn.onclick = () => handleAnswer(btn, opt, q.correct);
+            
+            // Nếu đã trả lời rồi thì hiển thị lại trạng thái cũ
+            if (hasAnswered) {
+                btn.disabled = true; // Khóa nút
+                if (opt.id === q.correct.id) btn.classList.add('correct'); // Hiện màu xanh
+                if (opt.id === q.selectedId && q.selectedId !== q.correct.id) btn.classList.add('wrong'); // Hiện màu đỏ nếu chọn sai
+            }
+
             grid.appendChild(btn);
         });
 
+        // Xử lý các phần tử khác khi đã trả lời
+        if (hasAnswered) {
+            document.getElementById('btnNext').style.visibility = 'visible'; // Hiện nút Next ngay
+            phoneticEl.classList.add('revealed'); // Hiện phiên âm
+            // Hiện thông báo kết quả
+            const isCorrect = (q.selectedId === q.correct.id);
+            document.getElementById('qMsg').innerHTML = isCorrect 
+                ? "<span style='color:var(--success)'>Đã trả lời đúng!</span>" 
+                : "<span style='color:var(--danger)'>Đã trả lời sai!</span>";
+        } else {
+            document.getElementById('btnNext').style.visibility = 'hidden'; // Ẩn nút Next nếu chưa làm
+        }
+
         document.getElementById('btnPrev').disabled = (historyIndex <= 0);
-        document.getElementById('btnNext').style.visibility = 'hidden'; 
     }
 
     async function handleAnswer(btn, selected, correct) {
+        // 1. Lưu lại đáp án vào lịch sử
+        if (quizHistory[historyIndex]) {
+            quizHistory[historyIndex].selectedId = selected.id;
+        }
+
+        // Disable buttons
         document.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
         document.getElementById('btnNext').style.visibility = 'visible';
         
-        // Hiện phiên âm khi đã trả lời xong
+        // Hiện phiên âm
         document.getElementById('qPhonetic').classList.add('revealed');
         
-        // Tự động đọc từ đúng (Nếu muốn tắt thì comment dòng dưới)
+        // Đọc từ
         speakText(correct.w, correct.l);
 
         const isCorrect = (selected.id === correct.id);
@@ -327,7 +362,10 @@
             btn.classList.add('correct');
             document.getElementById('qMsg').innerHTML = "<span style='color:var(--success)'>Chính xác! 🎉</span>";
             
-            if (!isCramMode) {
+            // CHỈ CẬP NHẬT SRS NẾU CÂU NÀY CHƯA TỪNG ĐƯỢC TRẢ LỜI (Tránh spam điểm khi back lại)
+            if (!isCramMode && !quizHistory[historyIndex].answered) {
+                quizHistory[historyIndex].answered = true; // Đánh dấu đã trả lời
+                
                 const currentLevel = correct.level || 0;
                 const newLevel = currentLevel + 1;
                 const daysToAdd = SRS_INTERVALS[newLevel] || 180;
@@ -340,7 +378,11 @@
                 if(b.innerText === correct.m) b.classList.add('correct');
             });
             document.getElementById('qMsg').innerHTML = "<span style='color:var(--danger)'>Sai rồi!</span>";
-            if (!isCramMode) await updateWordSRS(correct.id, 0, 0);
+            
+            if (!isCramMode && !quizHistory[historyIndex].answered) {
+                quizHistory[historyIndex].answered = true; // Đánh dấu đã trả lời
+                await updateWordSRS(correct.id, 0, 0);
+            }
         }
     }
 
