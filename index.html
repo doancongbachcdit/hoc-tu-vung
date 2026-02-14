@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vocab Master - IndexedDB (Database Offline)</title>
+    <script src="dexie.js"></script>
+    
+    <style>
+        :root { --primary: #2563eb; --bg: #f1f5f9; --card: #fff; --text: #1e293b; --success: #16a34a; --danger: #dc2626; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 600px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+        
+        /* UI Components */
+        .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .tabs { display: flex; gap: 5px; margin-bottom: 20px; background: #e2e8f0; padding: 5px; border-radius: 10px; }
+        .tab-btn { flex: 1; padding: 10px; border: none; background: none; font-weight: 600; cursor: pointer; border-radius: 8px; color: #64748b; transition: 0.2s; }
+        .tab-btn.active { background: #fff; color: var(--primary); shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .content { display: none; animation: fadeIn 0.3s; }
+        .content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; } }
+
+        /* Inputs & Buttons */
+        input, select { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 5px; transition: 0.2s; }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background: var(--primary); }
+        .btn-success { background: var(--success); }
+        .btn-danger { background: var(--danger); }
+        .btn-outline { background: white; border: 1px solid #cbd5e1; color: var(--text); }
+        
+        /* Quiz Styles */
+        .word-display { font-size: 2.5rem; font-weight: 800; text-align: center; color: var(--primary); margin: 20px 0; }
+        .grid-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .opt-btn { padding: 15px; background: white; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem; cursor: pointer; }
+        .opt-btn.correct { background: var(--success); color: white; border-color: var(--success); }
+        .opt-btn.wrong { background: var(--danger); color: white; border-color: var(--danger); opacity: 0.5; }
+
+        /* List Styles */
+        .vocab-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #f1f5f9; align-items: center; }
+        .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; font-weight: bold; margin-right: 8px; }
+        .badge.EN { background: #dbeafe; color: #1e40af; }
+        .badge.CN { background: #fce7f3; color: #9d174d; }
+    </style>
+</head>
+<body>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('quiz')">🧠 Quiz</button>
+        <button class="tab-btn" onclick="switchTab('data')">📂 Dữ Liệu</button>
+        <button class="tab-btn" onclick="switchTab('list')">📚 Danh Sách</button>
+    </div>
+
+    <div id="quiz" class="content active">
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px">
+                <select id="quizFilter" onchange="resetQuiz()" style="width:auto; padding:5px">
+                    <option value="ALL">Tất cả</option>
+                    <option value="EN">Tiếng Anh</option>
+                    <option value="CN">Tiếng Trung</option>
+                </select>
+                <small id="dbStats" style="color:#64748b">Loading...</small>
+            </div>
+
+            <div id="quizArea" style="display:none">
+                <div class="word-display" id="qWord">---</div>
+                <div class="grid-options" id="qOptions"></div>
+                <div id="qMsg" style="text-align:center; height:20px; margin:10px 0; font-weight:bold"></div>
+                <div style="display:flex; gap:10px">
+                    <button class="btn btn-outline" id="btnPrev" onclick="prevQuestion()" disabled>⬅️ Quay lại</button>
+                    <button class="btn btn-primary" onclick="nextQuestion()">Tiếp theo ➡️</button>
+                </div>
+            </div>
+
+            <div id="emptyArea" style="text-align:center; padding:30px; display:none">
+                <p>Cần ít nhất 4 từ vựng để bắt đầu!</p>
+                <button class="btn btn-primary" onclick="switchTab('data')">Thêm dữ liệu ngay</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="data" class="content">
+        <div class="card">
+            <h3>➕ Thêm Thủ Công</h3>
+            <div style="display:flex; gap:10px">
+                <input type="text" id="inpWord" placeholder="Từ (VD: Cat)" style="flex:2">
+                <select id="inpLang" style="flex:1"><option value="EN">Anh</option><option value="CN">Trung</option></select>
+            </div>
+            <input type="text" id="inpMeaning" placeholder="Nghĩa (VD: Con mèo)">
+            <button class="btn btn-primary" onclick="addWord()">Lưu Từ</button>
+            <p id="addStatus" style="text-align:center; color:var(--success); margin:5px 0"></p>
+        </div>
+
+        <div class="card">
+            <h3>📂 Nhập Excel (CSV) & Backup</h3>
+            <button class="btn btn-outline" onclick="downloadSample()" style="margin-bottom:10px">📥 Tải file mẫu CSV</button>
+            <div style="display:flex; gap:10px; margin-bottom:15px">
+                <input type="file" id="csvFile" accept=".csv" style="margin-bottom:0">
+                <button class="btn btn-success" onclick="importCSV()" style="width:auto">Nạp</button>
+            </div>
+            <div style="display:flex; gap:10px">
+                <button class="btn btn-outline" onclick="exportJSON()">⬇️ Backup</button>
+                <div style="position:relative; width:100%">
+                    <input type="file" id="jsonFile" accept=".json" style="position:absolute; opacity:0; width:100%; height:100%; cursor:pointer">
+                    <button class="btn btn-outline" style="width:100%">♻️ Restore (Chọn file)</button>
+                </div>
+            </div>
+        </div>
+        
+        <button class="btn btn-danger" onclick="clearDB()">🗑️ Xóa toàn bộ dữ liệu</button>
+    </div>
+
+    <div id="list" class="content">
+        <div class="card">
+            <input type="text" id="search" placeholder="🔍 Tìm kiếm..." onkeyup="renderList()">
+            <div id="listContainer" style="max-height:500px; overflow-y:auto"></div>
+        </div>
+    </div>
+
+<script>
+    // --- 1. SETUP DATABASE (DEXIE.JS) ---
+    // Tạo database tên 'VocabDB'
+    const db = new Dexie("VocabDB");
+    
+    // Định nghĩa bảng (Store). '++id' nghĩa là id tự tăng.
+    db.version(1).stores({
+        words: "++id, w, m, l" 
+    });
+
+    // Biến toàn cục để lưu dữ liệu tạm thời cho Quiz chạy nhanh
+    let cachedWords = [];
+    let quizHistory = [];
+    let historyIndex = -1;
+
+    // --- 2. CORE FUNCTIONS (Async/Await) ---
+
+    // Khởi động: Load dữ liệu từ DB vào RAM
+    async function initApp() {
+        cachedWords = await db.words.toArray();
+        updateStats();
+        
+        // Restore listener
+        document.getElementById('jsonFile').addEventListener('change', restoreJSON);
+
+        // Nếu đang ở tab quiz, start luôn
+        if(document.getElementById('quiz').classList.contains('active')) nextQuestion();
+    }
+
+    async function addWord() {
+        const w = document.getElementById('inpWord').value.trim();
+        const m = document.getElementById('inpMeaning').value.trim();
+        const l = document.getElementById('inpLang').value;
+
+        if(!w || !m) return alert("Thiếu từ hoặc nghĩa!");
+
+        // Lưu vào IndexedDB
+        const id = await db.words.add({ w, m, l });
+        
+        // Cập nhật RAM
+        cachedWords.unshift({ id, w, m, l });
+        
+        // UI Feedback
+        document.getElementById('inpWord').value = '';
+        document.getElementById('inpMeaning').value = '';
+        document.getElementById('addStatus').innerText = `Đã thêm: ${w}`;
+        setTimeout(() => document.getElementById('addStatus').innerText = '', 2000);
+        updateStats();
+    }
+
+    async function deleteWord(id) {
+        if(confirm("Xóa từ này?")) {
+            await db.words.delete(id); // Xóa trong DB
+            cachedWords = cachedWords.filter(x => x.id !== id); // Xóa trong RAM
+            renderList();
+            updateStats();
+        }
+    }
+
+    async function clearDB() {
+        if(confirm("CẢNH BÁO: Xóa sạch 100% dữ liệu?")) {
+            await db.words.clear();
+            cachedWords = [];
+            location.reload();
+        }
+    }
+
+    function updateStats() {
+        document.getElementById('dbStats').innerText = `Database: ${cachedWords.length} từ`;
+    }
+
+    // --- 3. IMPORT / EXPORT ---
+
+    function downloadSample() {
+        const content = "\uFEFFTuVung,Nghia,NgonNgu(EN/CN)\nHello,Xin chào,EN\n你好,Xin chào,CN";
+        const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "Mau_Tu_Vung.csv";
+        link.click();
+    }
+
+    function importCSV() {
+        const file = document.getElementById('csvFile').files[0];
+        if(!file) return alert("Chưa chọn file!");
+        
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const lines = e.target.result.split(/\r\n|\n/);
+            let count = 0;
+            let newItems = [];
+            
+            // Xử lý dữ liệu
+            lines.forEach(line => {
+                const p = line.split(',');
+                if(p.length >= 2 && !p[0].toLowerCase().includes('tuvung')) {
+                    const w = p[0].trim(), m = p[1].trim(), l = p[2]?.trim().toUpperCase() || 'EN';
+                    if(w && m) newItems.push({ w, m, l });
+                }
+            });
+
+            // Bulk Add vào DB (Nhanh hơn add từng cái)
+            if(newItems.length > 0) {
+                await db.words.bulkAdd(newItems);
+                cachedWords = await db.words.toArray(); // Reload RAM
+                alert(`Đã nạp thành công ${newItems.length} từ!`);
+                document.getElementById('csvFile').value = '';
+                updateStats();
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    async function exportJSON() {
+        const allData = await db.words.toArray();
+        const blob = new Blob([JSON.stringify(allData)], {type: "application/json"});
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `Backup_DB_${new Date().toISOString().slice(0,10)}.json`;
+        link.click();
+    }
+
+    function restoreJSON(e) {
+        const file = e.target.files[0];
+        if(!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            try {
+                const data = JSON.parse(ev.target.result);
+                if(Array.isArray(data) && confirm(`Khôi phục ${data.length} từ? Dữ liệu cũ sẽ mất.`)) {
+                    await db.words.clear();
+                    await db.words.bulkAdd(data);
+                    location.reload();
+                }
+            } catch(err) { alert("File lỗi!"); }
+        };
+        reader.readAsText(file);
+    }
+
+    // --- 4. QUIZ ENGINE (Giữ nguyên logic nhưng dùng cachedWords) ---
+
+    function resetQuiz() {
+        quizHistory = [];
+        historyIndex = -1;
+        nextQuestion();
+    }
+
+    function renderQuestion(q) {
+        document.getElementById('qWord').innerText = q.correct.w;
+        const grid = document.getElementById('qOptions');
+        grid.innerHTML = '';
+        document.getElementById('qMsg').innerText = '';
+
+        q.options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'opt-btn';
+            btn.innerText = opt.m;
+            btn.onclick = () => {
+                document.querySelectorAll('.opt-btn').forEach(b => {
+                    b.disabled = true;
+                    if(b.innerText === q.correct.m) b.classList.add('correct');
+                    else if(b === btn) b.classList.add('wrong');
+                });
+                document.getElementById('qMsg').innerText = (opt.id === q.correct.id) ? "🎉 Chính xác!" : "😅 Sai rồi!";
+            };
+            grid.appendChild(btn);
+        });
+        document.getElementById('btnPrev').disabled = (historyIndex <= 0);
+    }
+
+    function prevQuestion() {
+        if(historyIndex > 0) {
+            historyIndex--;
+            renderQuestion(quizHistory[historyIndex]);
+        }
+    }
+
+    function nextQuestion() {
+        if(historyIndex < quizHistory.length - 1) {
+            historyIndex++;
+            renderQuestion(quizHistory[historyIndex]);
+            return;
+        }
+
+        const filter = document.getElementById('quizFilter').value;
+        const pool = (filter === 'ALL') ? cachedWords : cachedWords.filter(x => x.l === filter);
+
+        if(pool.length < 4) {
+            document.getElementById('quizArea').style.display = 'none';
+            document.getElementById('emptyArea').style.display = 'block';
+            return;
+        }
+
+        document.getElementById('quizArea').style.display = 'block';
+        document.getElementById('emptyArea').style.display = 'none';
+
+        const correct = pool[Math.floor(Math.random() * pool.length)];
+        const others = pool.filter(x => x.id !== correct.id).sort(() => 0.5 - Math.random()).slice(0, 3);
+        const options = [correct, ...others].sort(() => 0.5 - Math.random());
+
+        const qData = { correct, options };
+        quizHistory.push(qData);
+        historyIndex++;
+        renderQuestion(qData);
+    }
+
+    // --- 5. LIST & TABS ---
+
+    function renderList() {
+        const container = document.getElementById('listContainer');
+        const search = document.getElementById('search').value.toLowerCase();
+        container.innerHTML = '';
+        
+        let count = 0;
+        // Sử dụng cachedWords (RAM) để render cho nhanh
+        for(const item of cachedWords) {
+            if(count > 50 && !search) break;
+            if(item.w.toLowerCase().includes(search) || item.m.toLowerCase().includes(search)) {
+                const div = document.createElement('div');
+                div.className = 'vocab-item';
+                div.innerHTML = `
+                    <div><span class="badge ${item.l}">${item.l}</span> <b>${item.w}</b> <span style="color:#666">- ${item.m}</span></div>
+                    <button onclick="deleteWord(${item.id})" style="border:none;background:none;cursor:pointer">🗑️</button>
+                `;
+                container.appendChild(div);
+                count++;
+            }
+        }
+    }
+
+    function switchTab(id) {
+        document.querySelectorAll('.content').forEach(e => e.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        document.querySelector(`button[onclick="switchTab('${id}')"]`).classList.add('active');
+        if(id === 'list') renderList();
+    }
+
+    // Chạy app
+    initApp();
+
+</script>
+</body>
+</html>
